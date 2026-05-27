@@ -1198,8 +1198,8 @@ const API_BASE = "https://skillbridge-backend-lehj.onrender.com/api";
     
     // Note: renderClientDashboard and renderFreelancerDashboard are kept exactly as in original
     // They already call getProjects(), getTasks(), etc. which now fetch from synced localStorage
-function renderFreelancerDashboard(email) {
-    renderContributorDashboard(email);
+function renderContributorDashboard(email) {
+    renderFreelancerDashboard(email);
 }
     // ========== START APP ==========
     (async function() {
