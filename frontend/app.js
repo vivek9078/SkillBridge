@@ -1054,7 +1054,7 @@
             await createUser({ name, email, role: "project-owner", phone: "", skills: "" });
         }
         
-        setSession(email, "client");
+        setSession(email, "project-owner");
         renderClientDashboard(email);
     };
 
@@ -1079,8 +1079,8 @@
         if (existing && existing.role === "freelancer") {
             setSession(email, "freelancer");
             renderContributorDashboard(email);
-        } else if (existing && existing.role === "client") {
-            alert("Email registered as project owner");
+        } else if (existing && existing.role === "project-owner") {
+        alert("Email registered as project owner");
         } else {
             const regDiv = document.getElementById("regForm");
             regDiv.style.display = "block";
@@ -1131,7 +1131,13 @@
         await saveUsers(users);
         
         // Save to backend
-        await createUser({ name, email, role: "contributor", phone, skills: category });
+        await createUser({
+    name,
+    email,
+    role: "freelancer",
+    phone,
+    skills: category
+});
 
         setSession(email, "freelancer");
         renderContributorDashboard(email);
@@ -1203,8 +1209,8 @@
         const session = getSession();
         if (session && session.email) {
             const user = findUser(session.email);
-            if (user && user.role === "client") {
-                renderClientDashboard(session.email);
+            if (user && user.role === "project-owner") {
+            renderClientDashboard(session.email);
             } else if (user && user.role === "freelancer") {
                 renderContributorDashboard(session.email);
             } else {
@@ -1690,11 +1696,11 @@
         const session = getSession();
         if (session && session.email) {
             const user = findUser(session.email);
-            if (user && user.role === "client") {
-                renderClientDashboard(session.email);
-            } else if (user && user.role === "freelancer") {
-                renderContributorDashboard(session.email);
-            } else {
+            if (user && user.role === "project-owner") {
+    renderClientDashboard(session.email);
+} else if (user && user.role === "freelancer") {
+    renderContributorDashboard(session.email);
+} else {
                 renderLogin();
             }
         } else {
