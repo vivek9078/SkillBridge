@@ -1,7 +1,7 @@
 (function() {
 
     // ========== BACKEND API BASE URL ==========
-const API_BASE = "https://skillbridge-backend-lehj.onrender.com/api";
+    const API_BASE = "https://skillbridge-backend-lehj.onrender.com/api";
     
     // ========== STORAGE KEYS ==========
     const STORAGE_USERS = "workhub_users_final";
@@ -113,7 +113,7 @@ const API_BASE = "https://skillbridge-backend-lehj.onrender.com/api";
                 localStorage.setItem(STORAGE_USERS, JSON.stringify(backendUsers));
             } else {
                 const defaultUsers = [
-                    { email: "client@demo.com",role: "project-owner", name: "John Project Owner", registered: true },
+                    { email: "client@demo.com", role: "project-owner", name: "John Project Owner", registered: true },
                     { email: "alice@dev.com", role: "contributor", name: "Alice Johnson", category: "Full Stack Developer", phone: "+1234567890", image: "https://randomuser.me/api/portraits/women/1.jpg", pastExperience: "7 years in React, Node.js, Python" }
                 ];
                 localStorage.setItem(STORAGE_USERS, JSON.stringify(defaultUsers));
@@ -179,19 +179,11 @@ const API_BASE = "https://skillbridge-backend-lehj.onrender.com/api";
     function getUsers() { return JSON.parse(localStorage.getItem(STORAGE_USERS) || "[]"); }
     async function saveUsers(users) { 
         localStorage.setItem(STORAGE_USERS, JSON.stringify(users));
-        // Sync with backend - save each user
-       // for (const user of users) {
-          //  await createUser(user);
-       // }
     }
     
     function getProjects() { return JSON.parse(localStorage.getItem(STORAGE_PROJECTS) || "[]"); }
     async function saveProjects(projects) { 
         localStorage.setItem(STORAGE_PROJECTS, JSON.stringify(projects));
-        // Sync with backend - save each project
-        //for (const project of projects) {
-         //   await createProjectAPI(project);
-        //}
     }
     
     function getInvitations() { return JSON.parse(localStorage.getItem(STORAGE_INVITATIONS) || "[]"); }
@@ -229,10 +221,6 @@ const API_BASE = "https://skillbridge-backend-lehj.onrender.com/api";
     function getTasks() { return JSON.parse(localStorage.getItem(STORAGE_TASKS) || "[]"); }
     async function saveTasks(tasks) { 
         localStorage.setItem(STORAGE_TASKS, JSON.stringify(tasks));
-        // Sync with backend - save each task
-       // for (const task of tasks) {
-        //    await createTaskAPI(task);
-      //  }
     }
     
     function getTasksByProject(projectId) {
@@ -766,14 +754,234 @@ const API_BASE = "https://skillbridge-backend-lehj.onrender.com/api";
         }
     };
 
-    // ========== PROJECT OWNER DASHBOARD ==========
-    // [Keep all existing renderClientDashboard code exactly as is]
-    // The function remains unchanged - it already uses getProjects(), getTasks(), etc.
-    // which now fetch from localStorage that is synced with backend
-    
+    // ========== LOGIN & REGISTRATION ==========
+    function renderLogin() {
+        const container = document.getElementById("app");
+        container.innerHTML = `
+            <div class="glass-card login-card">
+                <div style="text-align: center;">
+                    <h1>SkillBridge</h1>
+                    <p style="color: #4a5568; margin-top: 0.5rem;">Student Collaboration Platform</p>
+                </div>
+                <div class="role-buttons">
+                    <button onclick="window.showClientLogin()" class="btn btn-primary">📋 I'm a Project Owner</button>
+                    <button onclick="window.showFreelancerLogin()" class="btn btn-outline">💼 I'm a Contributor</button>
+                </div>
+                <div id="loginForm"></div>
+                <div style="text-align: center; margin-top: 1rem;">
+                    <button onclick="window.showCertificateVerifier()" class="btn btn-outline btn-sm">🔍 Verify Certificate</button>
+                </div>
+            </div>
+        `;
+    }
+
     // ========== CONTRIBUTOR DASHBOARD ==========
-    // [Keep all existing renderFreelancerDashboard code exactly as is]
+    function renderFreelancerDashboard(email) {
+        const user = findUser(email);
+        if (!user) {
+            renderLogin();
+            return;
+        }
+        
+        const projects = getProjects();
+        const userProjects = projects.filter(p => p.clientEmail === email || 
+            getProjectMembersByProject(p.id).some(m => m.freelancerEmail === email));
+        
+        const tasks = getTasks();
+        const userTasks = tasks.filter(t => t.assignedTo === email);
+        
+        const container = document.getElementById("app");
+        
+        container.innerHTML = `
+            <div class="glass-card">
+                <div class="flex-between">
+                    <h2>💼 Contributor Dashboard</h2>
+                    <div>
+                        <button onclick="window.showCertificateVerifier()" class="btn btn-outline btn-sm" style="margin-right:0.5rem;">🔍 Verify Certificate</button>
+                        <button onclick="window.showEditProfileForm('${email}')" class="btn btn-outline btn-sm" style="margin-right:0.5rem;">✏️ Edit Profile</button>
+                        <button onclick="window.logout()" class="logout-btn">Logout</button>
+                    </div>
+                </div>
+                
+                <div class="freelancer-profile">
+                    <img class="profile-img" src="${escapeHtml(user.image || 'https://via.placeholder.com/70')}" onerror="this.src='https://via.placeholder.com/70'">
+                    <div>
+                        <strong>${escapeHtml(user.name)}</strong><br>
+                        📌 ${escapeHtml(user.category || 'No skills listed')} | 📞 ${escapeHtml(user.phone || 'N/A')}<br>
+                        🎓 ${escapeHtml(user.pastExperience || 'No experience listed')}
+                    </div>
+                </div>
+                
+                <h3>📨 Project Invitations</h3>
+                <div id="invitations">
+                    <div class="message">Check your email for project invitations.</div>
+                </div>
+                
+                <h3>⚡ My Projects</h3>
+                <div id="activeProjects">
+                    ${userProjects.length === 0 ? '<div class="message">No projects yet. Accept invitations to get started!</div>' :
+                        userProjects.map(proj => {
+                            const projectTasks = tasks.filter(t => t.projectId === proj.id && t.assignedTo === email);
+                            const completedTasks = projectTasks.filter(t => t.status === 'approved').length;
+                            const progress = projectTasks.length > 0 ? Math.round((completedTasks / projectTasks.length) * 100) : 0;
+                            
+                            return `
+                                <div class="project-card">
+                                    <div class="flex-between">
+                                        <strong>📌 ${escapeHtml(proj.projectName)}</strong>
+                                        <span class="badge badge-hired">🏆 Progress: ${progress}%</span>
+                                    </div>
+                                    <div><strong>Owner:</strong> ${escapeHtml(proj.clientName || proj.clientEmail)}</div>
+                                    <div><strong>Domain:</strong> ${escapeHtml(proj.domain)} | <strong>Difficulty:</strong> ${escapeHtml(proj.difficulty)}</div>
+                                    <div><strong>Description:</strong> ${escapeHtml(proj.description)}</div>
+                                    <div class="progress-bar"><div class="progress-fill" style="width: ${progress}%"></div></div>
+                                    
+                                    <h4>📋 My Tasks (${projectTasks.length})</h4>
+                                    ${projectTasks.length === 0 ? '<div class="message">No tasks assigned yet.</div>' :
+                                        projectTasks.map(task => `
+                                            <div class="submission-card" style="background:${task.status === 'approved' ? '#c6f6d5' : task.status === 'submitted' ? '#fefcbf' : task.status === 'rejected' ? '#fed7d7' : '#edf2f7'}">
+                                                <div class="flex-between">
+                                                    <strong>${escapeHtml(task.title)}</strong>
+                                                    <span class="badge ${task.status === 'approved' ? 'badge-approved' : task.status === 'submitted' ? 'badge-pending' : 'badge-available'}">${task.status.toUpperCase()}</span>
+                                                </div>
+                                                <div>📝 ${escapeHtml(task.description)}</div>
+                                                ${task.status === 'todo' ? `<button class="btn btn-primary btn-sm" onclick="window.updateTask('${task.id}', 'in-progress', '${email}')">▶️ Start Task</button>` : ''}
+                                                ${task.status === 'rejected' ? `<button class="btn btn-primary btn-sm" onclick="window.updateTask('${task.id}', 'in-progress', '${email}')">🔄 Resubmit</button>` : ''}
+                                                ${task.status === 'submitted' ? '<div class="feedback-note">⏳ Waiting for approval...</div>' : ''}
+                                            </div>
+                                        `).join('')}
+                                    }
+                                    
+                                    <h4>📤 Submit Work</h4>
+                                    <div class="grid-2">
+                                        <select id="task-select-${proj.id}">
+                                            <option value="">Select task...</option>
+                                            ${projectTasks.filter(t => t.status === 'in-progress').map(task => `
+                                                <option value="${task.id}">${escapeHtml(task.title)}</option>
+                                            `).join('')}
+                                        </select>
+                                        <input type="text" id="fileUrl-${proj.id}" placeholder="File name (optional)">
+                                        <textarea id="workDesc-${proj.id}" placeholder="Describe your work..." rows="2" style="grid-column: span 2;"></textarea>
+                                    </div>
+                                    <button onclick="window.submitWorkForProject('${proj.id}', '${email}', '${proj.clientEmail}')" class="btn btn-primary btn-sm">📎 Submit</button>
+                                </div>
+                            `;
+                        }).join('')
+                    }
+                </div>
+            </div>
+        `;
+    }
     
+    // Alias for contributor dashboard
+    function renderContributorDashboard(email) {
+        renderFreelancerDashboard(email);
+    }
+
+    // ========== PROJECT OWNER DASHBOARD ==========
+    function renderClientDashboard(email) {
+        const user = findUser(email);
+        if (!user) {
+            renderLogin();
+            return;
+        }
+        
+        const projects = getProjects();
+        const userProjects = projects.filter(p => p.clientEmail === email);
+        const tasks = getTasks();
+        
+        const container = document.getElementById("app");
+        
+        container.innerHTML = `
+            <div class="glass-card">
+                <div class="flex-between">
+                    <h2>📋 Project Owner Dashboard</h2>
+                    <div>
+                        <button onclick="window.showCertificateVerifier()" class="btn btn-outline btn-sm" style="margin-right:0.5rem;">🔍 Verify Certificate</button>
+                        <button onclick="window.logout()" class="logout-btn">Logout</button>
+                    </div>
+                </div>
+                <div class="message">✅ Welcome, ${escapeHtml(email)}</div>
+                
+                <h3>➕ Create New Project</h3>
+                <div class="grid-2">
+                    <input type="text" id="projectName" placeholder="Project Name *">
+                    <input type="text" id="domain" placeholder="Domain (e.g., Web Development) *">
+                    <select id="difficulty">
+                        <option value="Beginner">Difficulty: Beginner</option>
+                        <option value="Intermediate">Difficulty: Intermediate</option>
+                        <option value="Advanced">Difficulty: Advanced</option>
+                    </select>
+                    <textarea id="description" placeholder="Project Description *" rows="2"></textarea>
+                    <textarea id="details" placeholder="Technical Details *" rows="2"></textarea>
+                    <input type="number" id="deadline" placeholder="Deadline (days)">
+                </div>
+                <button onclick="window.createProject('${email}')" class="btn btn-primary" style="width:100%; margin-bottom:1.5rem;">✨ Create Project</button>
+                
+                <h3>📌 My Projects</h3>
+                <div id="myProjects">
+                    ${userProjects.length === 0 ? '<div class="message">No projects created yet.</div>' : 
+                        userProjects.map(p => {
+                            const projectTasks = tasks.filter(t => t.projectId === p.id);
+                            const completedTasks = projectTasks.filter(t => t.status === 'approved').length;
+                            const progress = projectTasks.length > 0 ? Math.round((completedTasks / projectTasks.length) * 100) : 0;
+                            const memberCount = getProjectMembersByProject(p.id).length;
+                            
+                            return `
+                                <div class="project-card">
+                                    <div class="flex-between">
+                                        <strong>${escapeHtml(p.projectName)}</strong>
+                                        <span class="badge ${p.status === 'available' ? 'badge-available' : 'badge-hired'}">${p.status === 'available' ? 'Available' : 'In Progress'}</span>
+                                    </div>
+                                    <div>🏷️ ${escapeHtml(p.domain)} | 📊 ${escapeHtml(p.difficulty)}</div>
+                                    <div>📝 ${escapeHtml(p.description)}</div>
+                                    <div>👥 ${memberCount} member(s) | Progress: ${progress}%</div>
+                                    <div class="progress-bar"><div class="progress-fill" style="width: ${progress}%"></div></div>
+                                    <button onclick="window.showFreelancersForHire('${p.id}', '${escapeHtml(p.projectName)}')" class="btn btn-primary btn-sm">👥 ${memberCount > 0 ? 'Manage Team' : 'Invite Contributors'}</button>
+                                    <button onclick="window.showCreateTaskForm('${p.id}', '${escapeHtml(p.projectName)}')" class="btn btn-outline btn-sm">📋 Create Task</button>
+                                </div>
+                            `;
+                        }).join('')
+                    }
+                </div>
+                
+                <h3>⚡ Tasks Overview</h3>
+                <div id="activeProjects">
+                    ${userProjects.length === 0 ? '<div class="message">No projects to show.</div>' :
+                        userProjects.map(proj => {
+                            const projectTasks = tasks.filter(t => t.projectId === proj.id);
+                            const members = getProjectMembersByProject(proj.id);
+                            
+                            return `
+                                <div class="project-card">
+                                    <strong>📌 ${escapeHtml(proj.projectName)}</strong>
+                                    <h4>📋 Tasks (${projectTasks.length})</h4>
+                                    ${projectTasks.length === 0 ? '<div class="message">No tasks yet.</div>' :
+                                        projectTasks.map(task => `
+                                            <div class="submission-card">
+                                                <div class="flex-between">
+                                                    <strong>${escapeHtml(task.title)}</strong>
+                                                    <span class="badge badge-pending">${task.status.toUpperCase()}</span>
+                                                </div>
+                                                <div>📝 ${escapeHtml(task.description)}</div>
+                                                <div>👤 Assigned to: ${escapeHtml(findUser(task.assignedTo)?.name || task.assignedTo)}</div>
+                                                <button class="btn btn-outline btn-sm" onclick="window.showEditTaskForm('${task.id}', '${escapeHtml(task.title)}', '${escapeHtml(task.description)}', '${task.assignedTo}')">✏️ Edit</button>
+                                            </div>
+                                        `).join('')}
+                                    }
+                                    
+                                    <h4>👥 Team Members</h4>
+                                    ${members.length === 0 ? '<div class="message">No members yet.</div>' :
+                                        members.map(m => `<div>• ${escapeHtml(findUser(m.freelancerEmail)?.name || m.freelancerEmail)}</div>`).join('')}
+                                </div>
+                            `;
+                        }).join('')
+                    }
+                </div>
+            </div>
+        `;
+    }
+
     // ========== PROJECT CREATION ==========
     window.createProject = async function(clientEmail) {
         const projectName = document.getElementById("projectName").value.trim();
@@ -812,27 +1020,6 @@ const API_BASE = "https://skillbridge-backend-lehj.onrender.com/api";
         });
         renderClientDashboard(clientEmail);
     };
-
-    // ========== LOGIN & REGISTRATION ==========
-    function renderLogin() {
-        const container = document.getElementById("app");
-        container.innerHTML = `
-            <div class="glass-card login-card">
-                <div style="text-align: center;">
-                    <h1>SkillBridge</h1>
-                    <p style="color: #4a5568; margin-top: 0.5rem;">Student Collaboration Platform</p>
-                </div>
-                <div class="role-buttons">
-                    <button onclick="window.showClientLogin()" class="btn btn-primary">📋 I'm a Project Owner</button>
-                    <button onclick="window.showFreelancerLogin()" class="btn btn-outline">💼 I'm a Contributor</button>
-                </div>
-                <div id="loginForm"></div>
-                <div style="text-align: center; margin-top: 1rem;">
-                    <button onclick="window.showCertificateVerifier()" class="btn btn-outline btn-sm">🔍 Verify Certificate</button>
-                </div>
-            </div>
-        `;
-    }
 
     window.showClientLogin = function() {
         const formDiv = document.getElementById("loginForm");
@@ -929,7 +1116,7 @@ const API_BASE = "https://skillbridge-backend-lehj.onrender.com/api";
         }
 
         const users = getUsers();
-    const newUser = {
+        const newUser = {
             email,
             name,
             category,
@@ -1192,23 +1379,311 @@ const API_BASE = "https://skillbridge-backend-lehj.onrender.com/api";
         renderContributorDashboard(freelancerEmail);
     };
 
-    // [Keep renderClientDashboard function - unchanged but ensure it uses async where needed]
-    // [Keep renderFreelancerDashboard function - unchanged]
-    // [Keep showCertificate, printCertificate, etc. - unchanged]
+    window.showFreelancersForHire = function(projectId, projectName) {
+        const freelancers = getUsers().filter(u => u.role === "freelancer");
+        const currentMembers = getProjectMembersByProject(projectId);
+        const availableFreelancers = freelancers.filter(f => !currentMembers.some(m => m.freelancerEmail === f.email));
+        
+        const container = document.getElementById("app");
+        
+        container.innerHTML = `
+            <div class="glass-card">
+                <div class="flex-between">
+                    <h2>👥 Manage Team for: ${escapeHtml(projectName)}</h2>
+                    <button onclick="window.goBackToClient()" class="btn btn-outline">← Back to Dashboard</button>
+                </div>
+                
+                <div class="message">
+                    <strong>Current Team Members: ${currentMembers.length}</strong>
+                    ${currentMembers.map(m => {
+                        const f = findUser(m.freelancerEmail);
+                        const progress = getFreelancerTaskProgress(projectId, m.freelancerEmail);
+                        return `<div>• ${escapeHtml(f?.name)} (${escapeHtml(f?.category)}) - 🏆 ${progress}% contribution</div>`;
+                    }).join('')}
+                </div>
+                
+                <h3>📨 Invite New Contributors</h3>
+                <div class="grid-3">
+                    ${availableFreelancers.length === 0 ? '<div class="message">No more contributors available to invite!</div>' :
+                        availableFreelancers.map(f => `
+                        <div class="freelancer-card">
+                            <img class="profile-img" src="${escapeHtml(f.image)}" style="width:60px; height:60px;" onerror="this.src='https://via.placeholder.com/60'">
+                            <h3>${escapeHtml(f.name)}</h3>
+                            <div><strong>📌 Category:</strong> ${escapeHtml(f.category)}</div>
+                            <div><strong>📞 Phone:</strong> ${escapeHtml(f.phone)}</div>
+                            <div><strong>🎓 Skills & Experience:</strong> ${escapeHtml(f.pastExperience)}</div>
+                            <button onclick="window.sendInvitation('${projectId}', '${f.email}')" class="btn btn-primary" style="width:100%; margin-top:1rem;">📨 Invite to Project</button>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    };
+
+    window.sendInvitation = function(projectId, freelancerEmail) {
+        const session = getSession();
+        if (!session) return;
+        
+        const invitations = getInvitations();
+        const existing = invitations.find(i => i.projectId === projectId && i.freelancerEmail === freelancerEmail);
+        
+        if (existing) {
+            alert("Invitation already sent to this contributor!");
+            return;
+        }
+        
+        invitations.push({
+            id: "inv_" + Date.now(),
+            projectId: projectId,
+            clientEmail: session.email,
+            freelancerEmail: freelancerEmail,
+            status: "pending",
+            sentAt: Date.now()
+        });
+        
+        saveInvitations(invitations);
+        alert("Invitation sent successfully!");
+        renderClientDashboard(session.email);
+    };
+
+    window.showCreateTaskForm = function(projectId, projectName) {
+        const members = getProjectMembersByProject(projectId);
+        
+        const container = document.getElementById("app");
+        container.innerHTML = `
+            <div class="glass-card">
+                <div class="flex-between">
+                    <h2>📋 Create New Task for: ${escapeHtml(projectName)}</h2>
+                    <button onclick="window.goBackToClient()" class="btn btn-outline">← Back to Dashboard</button>
+                </div>
+                
+                <div class="form-group">
+                    <label>Task Title</label>
+                    <input type="text" id="taskTitle" placeholder="e.g., Design Homepage">
+                </div>
+                <div class="form-group">
+                    <label>Task Description</label>
+                    <textarea id="taskDescription" rows="3" placeholder="Detailed description of the task..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Assign To</label>
+                    <select id="taskAssignee">
+                        <option value="">Select contributor...</option>
+                        ${members.map(m => {
+                            const freelancer = findUser(m.freelancerEmail);
+                            return `<option value="${m.freelancerEmail}">${escapeHtml(freelancer?.name)} (${escapeHtml(freelancer?.category)})</option>`;
+                        }).join('')}
+                    </select>
+                </div>
+                <button onclick="window.createNewTask('${projectId}')" class="btn btn-primary" style="width:100%">✨ Create Task</button>
+            </div>
+        `;
+    };
+
+    window.createNewTask = async function(projectId) {
+        const title = document.getElementById("taskTitle").value.trim();
+        const description = document.getElementById("taskDescription").value.trim();
+        const assignedTo = document.getElementById("taskAssignee").value;
+        
+        if (!title || !description || !assignedTo) {
+            alert("Please fill all fields and assign to a contributor!");
+            return;
+        }
+        
+        if (!canAssignToProject(projectId, assignedTo)) {
+            alert("Task can only be assigned to existing team members!");
+            return;
+        }
+        
+        try {
+            await createTask(projectId, assignedTo, title, description);
+            alert("Task created successfully!");
+            
+            const session = getSession();
+            if (session && session.email) {
+                renderClientDashboard(session.email);
+            }
+        } catch (error) {
+            alert(error.message);
+        }
+    };
+
+    window.showEditTaskForm = function(taskId, currentTitle, currentDescription, currentAssignee) {
+        const session = getSession();
+        const tasks = getTasks();
+        const task = tasks.find(t => t.id === taskId);
+        if (!task) return;
+        
+        const members = getProjectMembersByProject(task.projectId);
+        
+        const container = document.getElementById("app");
+        container.innerHTML = `
+            <div class="glass-card">
+                <div class="flex-between">
+                    <h2>✏️ Edit Task</h2>
+                    <button onclick="window.goBackToClient()" class="btn btn-outline">Cancel</button>
+                </div>
+                
+                <div class="form-group">
+                    <label>Task Title</label>
+                    <input type="text" id="editTaskTitle" value="${escapeHtml(currentTitle)}">
+                </div>
+                <div class="form-group">
+                    <label>Task Description</label>
+                    <textarea id="editTaskDescription" rows="3">${escapeHtml(currentDescription)}</textarea>
+                </div>
+                <div class="form-group">
+                    <label>Assign To</label>
+                    <select id="editTaskAssignee">
+                        <option value="">Unassigned</option>
+                        ${members.map(m => {
+                            const freelancer = findUser(m.freelancerEmail);
+                            const selected = m.freelancerEmail === currentAssignee ? 'selected' : '';
+                            return `<option value="${m.freelancerEmail}" ${selected}>${escapeHtml(freelancer?.name)} (${escapeHtml(freelancer?.category)})</option>`;
+                        }).join('')}
+                    </select>
+                </div>
+                
+                <button onclick="window.saveTaskEdit('${taskId}')" class="btn btn-primary" style="width:100%">💾 Save Changes</button>
+            </div>
+        `;
+    };
+
+    window.saveTaskEdit = async function(taskId) {
+        const title = document.getElementById("editTaskTitle").value.trim();
+        const description = document.getElementById("editTaskDescription").value.trim();
+        const assignee = document.getElementById("editTaskAssignee").value;
+        const session = getSession();
+        
+        if (!title || !description) {
+            alert("Please fill all fields!");
+            return;
+        }
+        
+        if (await editTask(taskId, title, description, assignee, session.email)) {
+            alert("Task updated successfully!");
+            renderClientDashboard(session.email);
+        }
+    };
+
+    window.handleDeleteTask = async function(taskId) {
+        const session = getSession();
+        if (await deleteTask(taskId, session.email)) {
+            renderClientDashboard(session.email);
+        }
+    };
+
+    window.goBackToClient = function() {
+        const session = getSession();
+        if (session && session.email) {
+            renderClientDashboard(session.email);
+        }
+    };
+
+    window.handleRemoveFreelancer = function(projectId, freelancerEmail) {
+        const session = getSession();
+        if (session && confirm(`Are you sure you want to remove ${freelancerEmail} from this project?`)) {
+            removeFreelancer(projectId, freelancerEmail, session.email);
+            renderClientDashboard(session.email);
+        }
+    };
+
+    window.showCertificate = function(projectId, contributorEmail) {
+        const certificate = viewCertificate(projectId, contributorEmail);
+        if (certificate) {
+            const container = document.getElementById("app");
+            
+            container.innerHTML = `
+                <div class="glass-card" id="certificateContainer">
+                    <div class="flex-between" style="margin-bottom: 1rem;">
+                        <h2>🎓 Certificate of Completion</h2>
+                        <div>
+                            <button onclick="window.printCertificate()" class="btn btn-primary">🖨️ Print / Save as PDF</button>
+                            <button onclick="window.goBackToContributor('${contributorEmail}')" class="btn btn-outline">← Back to Dashboard</button>
+                        </div>
+                    </div>
+                    
+                    <div id="certificate" style="text-align: center; padding: 3rem; border: 10px double #667eea; border-radius: 1rem; margin: 1rem 0; background: white;">
+                        <h1 style="font-size: 2.5rem; color: #667eea; margin-bottom: 0.5rem;">SkillBridge</h1>
+                        <p style="color: #4a5568; font-size: 1rem; margin-bottom: 2rem;">Student Collaboration Platform</p>
+                        
+                        <div style="width: 100px; height: 2px; background: linear-gradient(90deg, #667eea, #764ba2); margin: 1rem auto;"></div>
+                        
+                        <h2 style="font-size: 1.8rem; color: #2d3748; margin: 1rem 0;">Certificate of Contribution</h2>
+                        
+                        <p style="font-size: 1.1rem; color: #4a5568; margin: 1rem 0;">This certificate is proudly presented to</p>
+                        
+                        <h3 style="font-size: 2rem; margin: 1rem 0; color: #2d3748;">${escapeHtml(certificate.contributorName)}</h3>
+                        
+                        <p style="font-size: 1rem; margin: 1rem 0;">for successfully contributing to the project</p>
+                        
+                        <h4 style="font-size: 1.3rem; margin: 0.5rem 0; color: #667eea;">"${escapeHtml(certificate.projectName)}"</h4>
+                        
+                        <p style="margin: 0.5rem 0;">as a <strong>${escapeHtml(certificate.contributorRole)}</strong></p>
+                        
+                        <div style="background: #f7fafc; padding: 1rem; border-radius: 0.5rem; margin: 1.5rem 0; display: inline-block; min-width: 300px;">
+                            <p><strong>Tasks Completed:</strong> ${certificate.completedTasks} / ${certificate.totalTasks}</p>
+                            <p><strong>Contribution Score:</strong> ${certificate.contributionPercentage}%</p>
+                            <p><strong>Issue Date:</strong> ${new Date(certificate.issueDate).toLocaleDateString()}</p>
+                            <p><strong>Certificate Code:</strong> ${certificate.certificateCode}</p>
+                        </div>
+                        
+                        ${certificate.feedback && certificate.feedback.length > 0 ? `
+                            <div style="background: #e6fffa; padding: 1rem; border-radius: 0.5rem; margin-top: 1rem;">
+                                <p><strong>🎯 Project Owner Feedback:</strong></p>
+                                <p>${certificate.feedback.map(f => `"${escapeHtml(f)}"`).join('<br>')}</p>
+                            </div>
+                        ` : ''}
+                        
+                        <div style="margin-top: 2rem;">
+                            <div style="border-top: 1px solid #e2e8f0; margin: 1rem 0;"></div>
+                            <p style="font-size: 0.8rem; color: #a0aec0;">SkillBridge - Building Future Professionals</p>
+                        </div>
+                    </div>
+                    
+                    <div class="message" style="margin-top: 1rem; text-align: center;">
+                        💡 <strong>Tip:</strong> Use the "Print / Save as PDF" button to download your certificate.
+                    </div>
+                </div>
+            `;
+        }
+    };
     
-    // Note: renderClientDashboard and renderFreelancerDashboard are kept exactly as in original
-    // They already call getProjects(), getTasks(), etc. which now fetch from synced localStorage
-function renderContributorDashboard(email) {
-    // NOTE: If renderFreelancerDashboard exists in a separate file loaded before this one,
-    // restore this body to: renderFreelancerDashboard(email);
-    // Otherwise, the dashboard render logic must live here directly.
-    if (typeof renderFreelancerDashboard === 'function') {
-        renderFreelancerDashboard(email);
-    } else {
-        console.error('renderFreelancerDashboard is not defined. Ensure it is declared in scope before this IIFE runs.');
-        document.getElementById('app').innerHTML = '<div class="glass-card"><p>Dashboard failed to load. Please refresh or contact support.</p><button onclick="window.logout()" class="btn btn-outline">Logout</button></div>';
-    }
-}
+    window.printCertificate = function() {
+        const certificateElement = document.getElementById('certificate');
+        const originalTitle = document.title;
+        document.title = 'SkillBridge Certificate';
+        
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+            <html>
+                <head>
+                    <title>SkillBridge Certificate</title>
+                    <style>
+                        body {
+                            font-family: system-ui, 'Segoe UI', -apple-system, sans-serif;
+                            padding: 2rem;
+                            margin: 0;
+                        }
+                        @media print {
+                            body {
+                                padding: 0;
+                                margin: 0;
+                            }
+                        }
+                    </style>
+                </head>
+                <body>
+                    ${certificateElement.outerHTML}
+                </body>
+            </html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
+        
+        document.title = originalTitle;
+    };
+
     // ========== START APP ==========
     (async function() {
         await initializeStorage();
