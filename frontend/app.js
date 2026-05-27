@@ -1,11 +1,7 @@
 (function() {
 
     // ========== BACKEND API BASE URL ==========
-<<<<<<< HEAD
-    const API_BASE = "https://skillbridge-backend-lehj.onrender.com";
-=======
-    const API_BASE = "https://skillbridge-backend-lehj.onrender.com/api";
->>>>>>> e1db2a4 (Fix deployed API and dashboard issues)
+const API_BASE = "https://skillbridge-backend-lehj.onrender.com/api";
     
     // ========== STORAGE KEYS ==========
     const STORAGE_USERS = "workhub_users_final";
@@ -1202,7 +1198,9 @@
     
     // Note: renderClientDashboard and renderFreelancerDashboard are kept exactly as in original
     // They already call getProjects(), getTasks(), etc. which now fetch from synced localStorage
-
+function renderFreelancerDashboard(email) {
+    renderContributorDashboard(email);
+}
     // ========== START APP ==========
     (async function() {
         await initializeStorage();
