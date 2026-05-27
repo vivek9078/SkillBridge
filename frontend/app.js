@@ -13,6 +13,22 @@ const API_BASE = "https://skillbridge-backend-lehj.onrender.com/api";
     const STORAGE_TASKS = "workhub_tasks_final";
     const STORAGE_CERTIFICATES = "workhub_certificates_final";
 
+        // ========== DASHBOARD ALIAS FUNCTIONS ==========
+    // Forward declaration to prevent "renderContributorDashboard is not defined" error
+    function renderContributorDashboard(email) {
+        if (typeof renderFreelancerDashboard === 'function') {
+            renderFreelancerDashboard(email);
+        } else {
+            console.warn('renderFreelancerDashboard not yet defined, will retry');
+            // Retry after a short delay
+            setTimeout(() => {
+                if (typeof renderFreelancerDashboard === 'function') {
+                    renderFreelancerDashboard(email);
+                }
+            }, 100);
+        }
+    }
+    
     // ========== API FUNCTIONS ==========
     async function apiFetch(endpoint, options = {}) {
         try {
