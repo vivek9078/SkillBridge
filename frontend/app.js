@@ -206,6 +206,15 @@
         });
     }
     
+    // Helper to get invitations by project
+    async function getInvitationsByProject(projectId) {
+        try {
+            return await apiFetch(`/invitations/project/${projectId}`);
+        } catch {
+            return [];
+        }
+    }
+    
     // ========== SESSION MANAGEMENT ==========
     function getSession() { 
         return JSON.parse(localStorage.getItem(STORAGE_SESSION) || "null"); 
@@ -327,7 +336,7 @@
         return Math.round((approvedTasks / userTasks.length) * 100);
     }
     
-    // ========== SUBMISSION FUNCTIONS (Keep in localStorage as they're transient) ==========
+    // ========== SUBMISSION FUNCTIONS ==========
     const STORAGE_SUBMISSIONS = "workhub_submissions_final";
     
     function getSubmissions() { 
@@ -338,16 +347,17 @@
         localStorage.setItem(STORAGE_SUBMISSIONS, JSON.stringify(submissions)); 
     }
     
-    function submitWork(projectId, freelancerEmail, taskId, milestone, description, fileUrl, tasks, updateTasksCallback) {
+    async function submitWork(projectId, freelancerEmail, taskId, milestone, description, fileUrl) {
+        // Check for existing pending submission
         const submissions = getSubmissions();
-        
         const existingSubmission = submissions.find(s => s.taskId === taskId && s.status === 'pending');
         if (existingSubmission) {
             alert("You already have a pending submission for this task. Wait for review.");
             return false;
         }
         
-        submissions.push({
+        // Save submission to localStorage for history/transparency
+        const newSubmission = {
             id: Date.now(),
             projectId: projectId,
             freelancerEmail: freelancerEmail,
@@ -358,15 +368,20 @@
             status: "pending",
             feedback: null,
             submittedAt: Date.now()
-        });                 
+        };
+        submissions.push(newSubmission);                 
         saveSubmissions(submissions);
         
-        // Update task status in backend
-        updateTaskStatusAPI(taskId, 'submitted').then(() => {
-            if (updateTasksCallback) updateTasksCallback();
-        });
-        
-        return true;
+        // CRITICAL FIX: Save submission data to the task's submissionLink field in MongoDB
+        // This makes it visible to the project owner
+        try {
+            await updateTaskStatusAPI(taskId, 'submitted', fileUrl || "work_sample.pdf", description);
+            return true;
+        } catch (error) {
+            console.error("Failed to update task with submission:", error);
+            alert("Failed to submit work. Please try again.");
+            return false;
+        }
     }
     
     // ========== LOGIN & REGISTRATION ==========
@@ -612,6 +627,7 @@
                                                         <span class="badge ${task.status === 'approved' ? 'badge-approved' : task.status === 'submitted' ? 'badge-pending' : 'badge-available'}">${task.status.toUpperCase()}</span>
                                                     </div>
                                                     <div>📝 ${escapeHtml(task.description)}</div>
+                                                    ${task.status === 'rejected' && task.feedback ? `<div class="feedback-note" style="color:#e53e3e;">❌ Feedback: ${escapeHtml(task.feedback)}</div>` : ''}
                                                     ${task.status === 'todo' ? `<button class="btn btn-primary btn-sm" onclick="window.updateTask('${task._id}', 'in-progress', '${email}')">▶️ Start Task</button>` : ''}
                                                     ${task.status === 'rejected' ? `<button class="btn btn-primary btn-sm" onclick="window.updateTask('${task._id}', 'in-progress', '${email}')">🔄 Resubmit</button>` : ''}
                                                     ${task.status === 'submitted' ? '<div class="feedback-note">⏳ Waiting for approval...</div>' : ''}
@@ -627,7 +643,7 @@
                                                     <option value="${task._id}">${escapeHtml(task.title)}</option>
                                                 `).join('')}
                                             </select>
-                                            <input type="text" id="fileUrl-${projectId}" placeholder="File name (optional)">
+                                            <input type="text" id="fileUrl-${projectId}" placeholder="File name or link (optional)">
                                             <textarea id="workDesc-${projectId}" placeholder="Describe your work..." rows="2" style="grid-column: span 2;"></textarea>
                                         </div>
                                         <button onclick="window.submitWorkForProject('${projectId}', '${email}')" class="btn btn-primary btn-sm">📎 Submit</button>
@@ -642,6 +658,7 @@
             `;
         } catch (error) {
             console.error("Render contributor dashboard error:", error);
+            const container = document.getElementById("app");
             container.innerHTML = `<div class="glass-card"><div class="message">Error loading dashboard. Please refresh.</div><button onclick="window.logout()" class="btn btn-primary">Back to Login</button></div>`;
         }
     }
@@ -730,16 +747,33 @@
                                         ${projectTasks.length === 0 ? '<div class="message">No tasks yet.</div>' :
                                             projectTasks.map(task => {
                                                 const assigneeUser = allUsers.find(u => u.email === task.assignedTo);
+                                                const isSubmitted = task.status === 'submitted';
+                                                
                                                 return `
-                                                    <div class="submission-card">
+                                                    <div class="submission-card" style="background:${task.status === 'approved' ? '#c6f6d5' : task.status === 'submitted' ? '#fefcbf' : '#edf2f7'}">
                                                         <div class="flex-between">
                                                             <strong>${escapeHtml(task.title)}</strong>
-                                                            <span class="badge badge-pending">${task.status.toUpperCase()}</span>
+                                                            <span class="badge ${task.status === 'approved' ? 'badge-approved' : task.status === 'submitted' ? 'badge-pending' : 'badge-available'}">${task.status.toUpperCase()}</span>
                                                         </div>
                                                         <div>📝 ${escapeHtml(task.description)}</div>
                                                         <div>👤 Assigned to: ${escapeHtml(assigneeUser?.name || task.assignedTo)}</div>
-                                                        <button class="btn btn-outline btn-sm" onclick="window.showEditTaskForm('${task._id}', '${escapeHtml(task.title)}', '${escapeHtml(task.description)}', '${task.assignedTo}')">✏️ Edit</button>
-                                                        <button class="btn btn-danger btn-sm" onclick="window.handleDeleteTask('${task._id}')">🗑️ Delete</button>
+                                                        
+                                                        ${isSubmitted ? `
+                                                            <div style="margin-top: 0.8rem; padding: 0.8rem; background: #fff; border-radius: 0.5rem; border-left: 3px solid #ed8936;">
+                                                                <strong>📎 Submitted Work:</strong><br>
+                                                                ${task.submissionLink ? `<div>🔗 File/Link: <a href="${escapeHtml(task.submissionLink)}" target="_blank" style="color: #667eea;">${escapeHtml(task.submissionLink)}</a></div>` : '<div>No file/link provided</div>'}
+                                                                ${task.feedback && task.feedback !== 'No feedback provided' ? `<div>📝 Description: ${escapeHtml(task.feedback)}</div>` : '<div>📝 Work submitted, pending review</div>'}
+                                                                <div style="margin-top: 0.8rem; display: flex; gap: 0.5rem;">
+                                                                    <button class="btn btn-success btn-sm" onclick="window.approveTaskSubmission('${task._id}', '${task.assignedTo}')">✅ Approve</button>
+                                                                    <button class="btn btn-danger btn-sm" onclick="window.rejectTaskSubmission('${task._id}', '${task.assignedTo}')">❌ Reject & Request Changes</button>
+                                                                </div>
+                                                            </div>
+                                                        ` : ''}
+                                                        
+                                                        <div style="margin-top: 0.5rem;">
+                                                            <button class="btn btn-outline btn-sm" onclick="window.showEditTaskForm('${task._id}', '${escapeHtml(task.title)}', '${escapeHtml(task.description)}', '${task.assignedTo}')">✏️ Edit</button>
+                                                            <button class="btn btn-danger btn-sm" onclick="window.handleDeleteTask('${task._id}')">🗑️ Delete</button>
+                                                        </div>
                                                     </div>
                                                 `;
                                             }).join('')
@@ -752,6 +786,7 @@
                                                 const memberProgress = getFreelancerTaskProgress(projectTasks, m.email);
                                                 return `<div class="flex-between">• ${escapeHtml(memberUser?.name || m.email)} - 🏆 ${memberProgress}% contribution
                                                     <button onclick="window.handleRemoveFreelancer('${projectId}', '${m.email}')" class="btn btn-danger btn-sm">Remove</button>
+                                                    <button onclick="window.showCertificate('${projectId}', '${m.email}')" class="btn btn-outline btn-sm">🎓 View Certificate</button>
                                                 </div>`;
                                             }).join('')
                                         }
@@ -907,15 +942,6 @@
             alert("Failed to send invitation: " + error.message);
         }
     };
-    
-    // Helper to get invitations by project
-    async function getInvitationsByProject(projectId) {
-        try {
-            return await apiFetch(`/invitations/project/${projectId}`);
-        } catch {
-            return [];
-        }
-    }
     
     // ========== TASK MANAGEMENT ==========
     window.showCreateTaskForm = async function(projectId, projectName) {
@@ -1084,6 +1110,47 @@
         }
     };
     
+    // ========== TASK APPROVAL/REJECTION FOR MENTOR ==========
+    window.approveTaskSubmission = async function(taskId, contributorEmail) {
+        if (!confirm("Approve this submission? This will mark the task as completed.")) return;
+        
+        try {
+            await updateTaskStatusAPI(taskId, 'approved', '', 'Task approved by project owner');
+            alert("Task approved successfully! Contributor will receive certificate upon completing all tasks.");
+            
+            const session = getSession();
+            if (session && session.email) {
+                await renderClientDashboard(session.email);
+            }
+        } catch (error) {
+            console.error("Approve task error:", error);
+            alert("Failed to approve task: " + error.message);
+        }
+    };
+    
+    window.rejectTaskSubmission = async function(taskId, contributorEmail) {
+        const feedback = prompt("Please provide feedback for revision (what needs to be fixed):");
+        if (!feedback) {
+            alert("Feedback is required when rejecting a submission.");
+            return;
+        }
+        
+        if (!confirm("Reject this submission? The contributor will need to resubmit with requested changes.")) return;
+        
+        try {
+            await updateTaskStatusAPI(taskId, 'rejected', '', feedback);
+            alert("Task rejected. Feedback has been sent to the contributor.");
+            
+            const session = getSession();
+            if (session && session.email) {
+                await renderClientDashboard(session.email);
+            }
+        } catch (error) {
+            console.error("Reject task error:", error);
+            alert("Failed to reject task: " + error.message);
+        }
+    };
+    
     // ========== SUBMISSION FUNCTIONS ==========
     window.submitWorkForProject = async function(projectId, freelancerEmail) {
         const taskSelect = document.getElementById(`task-select-${projectId}`);
@@ -1119,7 +1186,8 @@
                 return;
             }
             
-            const success = submitWork(projectId, freelancerEmail, taskId, task.title, description, fileUrl || "work_sample.pdf", null, null);
+            // Use the updated submitWork function which saves to task.submissionLink
+            const success = await submitWork(projectId, freelancerEmail, taskId, task.title, description, fileUrl || "work_sample.pdf");
             
             if (success) {
                 alert("Contribution submitted! Waiting for project owner approval.");
