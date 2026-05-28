@@ -1141,17 +1141,6 @@
             return;
         }
 
-        const users = getUsers();
-        const newUser = {
-            email,
-            name,
-            category,
-            phone,
-            image,
-            pastExperience: experience,
-            role: "contributor",
-            registered: true
-        };
 
         
         // Save to backend
@@ -1166,8 +1155,12 @@
         pastExperience: experience
     });
 
-    users.push(newUser);
-    await saveUsers(users);
+const backendUsers = await getUsersFromAPI();
+
+localStorage.setItem(
+    STORAGE_USERS,
+    JSON.stringify(backendUsers || [])
+);
 
 } catch (error) {
     console.error("Contributor registration failed:", error);
