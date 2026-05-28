@@ -1126,18 +1126,28 @@
             role: "contributor",
             registered: true
         };
-        
-        users.push(newUser);
-        await saveUsers(users);
+
         
         // Save to backend
-        await createUser({
-    name,
-    email,
-    role: "contributor",
-    phone,
-    skills: category
-});
+        try {
+    await createUser({
+        name: name,
+        email: email,
+        role: "contributor",
+        phone: phone,
+        category: category,
+        image: image,
+        pastExperience: experience
+    });
+
+    users.push(newUser);
+    await saveUsers(users);
+
+} catch (error) {
+    console.error("Contributor registration failed:", error);
+    alert("Failed to save contributor to database");
+    return;
+}
 
         setSession(email, "contributor");
         renderContributorDashboard(email);
