@@ -394,24 +394,55 @@
                     <p style="color: #4a5568; margin-top: 0.5rem;">Student Collaboration Platform</p>
                 </div>
                 <div class="role-buttons">
-                    <button onclick="window.showClientLogin()" class="btn btn-primary">📋 I'm a Project Owner</button>
-                    <button onclick="window.showFreelancerLogin()" class="btn btn-outline">💼 I'm a Contributor</button>
+                    <button id="clientLoginBtn" class="btn btn-primary">📋 I'm a Project Owner</button>
+                    <button id="freelancerLoginBtn" class="btn btn-outline">💼 I'm a Contributor</button>
                 </div>
                 <div id="loginForm"></div>
                 <div style="text-align: center; margin-top: 1rem;">
-                    <button onclick="window.showCertificateVerifier()" class="btn btn-outline btn-sm">🔍 Verify Certificate</button>
+                    <button id="verifyCertBtn" class="btn btn-outline btn-sm">🔍 Verify Certificate</button>
                 </div>
             </div>
         `;
+        
+        // FIX START: Use addEventListener instead of inline onclick
+        document.getElementById('clientLoginBtn').addEventListener('click', function() {
+            console.log("[DEBUG] Mentor Continue button clicked");
+            window.showClientLogin();
+        });
+        
+        document.getElementById('freelancerLoginBtn').addEventListener('click', function() {
+            console.log("[DEBUG] Contributor Check/Register button clicked");
+            window.showFreelancerLogin();
+        });
+        
+        document.getElementById('verifyCertBtn').addEventListener('click', function() {
+            console.log("[DEBUG] Verify Certificate button clicked");
+            window.showCertificateVerifier();
+        });
+        // FIX END
     }
     
     window.showClientLogin = function() {
+        console.log("[DEBUG] showClientLogin called");
         const formDiv = document.getElementById("loginForm");
         formDiv.innerHTML = `
             <div class="form-group"><label>Full Name</label><input type="text" id="clientName" placeholder="Enter your name"></div>
             <div class="form-group"><label>Email</label><input type="email" id="clientEmail" placeholder="projectowner@example.com"></div>
-            <button onclick="window.handleClientLogin()" class="btn btn-primary" style="width:100%">Continue →</button>
+            <button id="clientContinueBtn" class="btn btn-primary" style="width:100%">Continue →</button>
         `;
+        
+        // FIX START: Bind continue button with addEventListener
+        const continueBtn = document.getElementById('clientContinueBtn');
+        if (continueBtn) {
+            // Remove any existing listeners to prevent duplicates
+            const newBtn = continueBtn.cloneNode(true);
+            continueBtn.parentNode.replaceChild(newBtn, continueBtn);
+            newBtn.addEventListener('click', function() {
+                console.log("[DEBUG] Mentor Continue button clicked - processing login");
+                window.handleClientLogin();
+            });
+        }
+        // FIX END
     };
     
     window.handleClientLogin = async function() {
@@ -453,16 +484,31 @@
     };
     
     window.showFreelancerLogin = function() {
+        console.log("[DEBUG] showFreelancerLogin called");
         const formDiv = document.getElementById("loginForm");
         formDiv.innerHTML = `
             <div class="form-group"><label>Email</label><input type="email" id="freelancerEmail" placeholder="contributor@example.com"></div>
-            <button onclick="window.checkFreelancer()" class="btn btn-primary" style="width:100%">Check / Register →</button>
+            <button id="freelancerCheckBtn" class="btn btn-primary" style="width:100%">Check / Register →</button>
             <div id="regForm" style="display:none; margin-top:1.5rem;"></div>
         `;
+        
+        // FIX START: Bind check button with addEventListener
+        const checkBtn = document.getElementById('freelancerCheckBtn');
+        if (checkBtn) {
+            // Remove any existing listeners to prevent duplicates
+            const newBtn = checkBtn.cloneNode(true);
+            checkBtn.parentNode.replaceChild(newBtn, checkBtn);
+            newBtn.addEventListener('click', function() {
+                console.log("[DEBUG] Contributor Check/Register button clicked - processing");
+                window.checkFreelancer();
+            });
+        }
+        // FIX END
     };
     
     window.checkFreelancer = async function() {
         const email = document.getElementById("freelancerEmail").value.trim().toLowerCase();
+        console.log("[DEBUG] checkFreelancer called for email:", email);
         if (!email) return alert("Enter email");
         
         if (!isValidEmail(email)) {
@@ -473,11 +519,13 @@
             const existing = await getUserByEmail(email);
             
             if (existing && existing.role === "contributor") {
+                console.log("[DEBUG] Existing contributor found, logging in");
                 setSession(email, "contributor");
                 await renderContributorDashboard(email);
             } else if (existing && existing.role === "project-owner") {
                 alert("Email registered as project owner. Please use a different email or login as project owner.");
             } else {
+                console.log("[DEBUG] New contributor, showing registration form");
                 const regDiv = document.getElementById("regForm");
                 regDiv.style.display = "block";
                 regDiv.innerHTML = `
@@ -487,8 +535,21 @@
                     <div class="form-group"><label>Phone</label><input type="text" id="regPhone"></div>
                     <div class="form-group"><label>Profile Image URL</label><input type="text" id="regImage" placeholder="https://..."></div>
                     <div class="form-group"><label>Skills & Experience</label><textarea id="regExperience" rows="2"></textarea></div>
-                    <button onclick="window.completeRegistration('${email}')" class="btn btn-primary" style="width:100%">Register →</button>
+                    <button id="registerSubmitBtn" class="btn btn-primary" style="width:100%">Register →</button>
                 `;
+                
+                // FIX START: Bind register button with addEventListener
+                const registerBtn = document.getElementById('registerSubmitBtn');
+                if (registerBtn) {
+                    // Remove any existing listeners to prevent duplicates
+                    const newBtn = registerBtn.cloneNode(true);
+                    registerBtn.parentNode.replaceChild(newBtn, registerBtn);
+                    newBtn.addEventListener('click', function() {
+                        console.log("[DEBUG] Register button clicked for email:", email);
+                        window.completeRegistration(email);
+                    });
+                }
+                // FIX END
             }
         } catch (error) {
             console.error("Check freelancer error:", error);
@@ -497,13 +558,18 @@
     };
     
     window.completeRegistration = async function(email) {
+        console.log("[DEBUG] completeRegistration called for email:", email);
+        
         const name = document.getElementById("regName").value.trim();
         const category = document.getElementById("regCategory").value.trim();
         const phone = document.getElementById("regPhone").value.trim();
         const image = document.getElementById("regImage").value.trim();
         const experience = document.getElementById("regExperience").value.trim();
         
+        console.log("[DEBUG] Registration data - Name:", name, "Category:", category, "Phone:", phone);
+        
         if (!name || !category || !phone || !image || !experience) {
+            console.log("[DEBUG] Missing registration fields");
             return alert("Please fill all fields");
         }
         
@@ -516,6 +582,7 @@
         }
         
         try {
+            console.log("[DEBUG] Creating user in database...");
             await createUser({
                 name: name,
                 email: email,
@@ -526,8 +593,10 @@
                 pastExperience: experience
             });
             
+            console.log("[DEBUG] User created successfully, setting session");
             setSession(email, "contributor");
             await renderContributorDashboard(email);
+            console.log("[DEBUG] Dashboard rendered successfully");
         } catch (error) {
             console.error("Contributor registration failed:", error);
             alert("Failed to save contributor to database: " + error.message);
