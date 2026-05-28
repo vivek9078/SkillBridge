@@ -404,7 +404,6 @@
             </div>
         `;
         
-        // FIX START: Use addEventListener instead of inline onclick
         document.getElementById('clientLoginBtn').addEventListener('click', function() {
             console.log("[DEBUG] Mentor Continue button clicked");
             window.showClientLogin();
@@ -419,7 +418,6 @@
             console.log("[DEBUG] Verify Certificate button clicked");
             window.showCertificateVerifier();
         });
-        // FIX END
     }
     
     window.showClientLogin = function() {
@@ -431,10 +429,8 @@
             <button id="clientContinueBtn" class="btn btn-primary" style="width:100%">Continue →</button>
         `;
         
-        // FIX START: Bind continue button with addEventListener
         const continueBtn = document.getElementById('clientContinueBtn');
         if (continueBtn) {
-            // Remove any existing listeners to prevent duplicates
             const newBtn = continueBtn.cloneNode(true);
             continueBtn.parentNode.replaceChild(newBtn, continueBtn);
             newBtn.addEventListener('click', function() {
@@ -442,7 +438,6 @@
                 window.handleClientLogin();
             });
         }
-        // FIX END
     };
     
     window.handleClientLogin = async function() {
@@ -458,11 +453,9 @@
         }
         
         try {
-            // Check if user exists
             let user = await getUserByEmail(email);
             
             if (!user) {
-                // Create new user
                 user = await createUser({ 
                     name, 
                     email, 
@@ -471,7 +464,6 @@
                     skills: ""
                 });
             } else if (user.role !== "project-owner") {
-                // Update role if needed
                 user = await updateUserByEmail(email, { ...user, role: "project-owner" });
             }
             
@@ -492,10 +484,8 @@
             <div id="regForm" style="display:none; margin-top:1.5rem;"></div>
         `;
         
-        // FIX START: Bind check button with addEventListener
         const checkBtn = document.getElementById('freelancerCheckBtn');
         if (checkBtn) {
-            // Remove any existing listeners to prevent duplicates
             const newBtn = checkBtn.cloneNode(true);
             checkBtn.parentNode.replaceChild(newBtn, checkBtn);
             newBtn.addEventListener('click', function() {
@@ -503,7 +493,6 @@
                 window.checkFreelancer();
             });
         }
-        // FIX END
     };
     
     window.checkFreelancer = async function() {
@@ -538,10 +527,8 @@
                     <button id="registerSubmitBtn" class="btn btn-primary" style="width:100%">Register →</button>
                 `;
                 
-                // FIX START: Bind register button with addEventListener
                 const registerBtn = document.getElementById('registerSubmitBtn');
                 if (registerBtn) {
-                    // Remove any existing listeners to prevent duplicates
                     const newBtn = registerBtn.cloneNode(true);
                     registerBtn.parentNode.replaceChild(newBtn, registerBtn);
                     newBtn.addEventListener('click', function() {
@@ -549,7 +536,6 @@
                         window.completeRegistration(email);
                     });
                 }
-                // FIX END
             }
         } catch (error) {
             console.error("Check freelancer error:", error);
@@ -612,7 +598,6 @@
                 return;
             }
             
-            // Fetch all data from backend
             const allProjects = await getProjects();
             const userProjects = allProjects.filter(p => 
                 p.contributors && p.contributors.some(c => c.email === email)
@@ -674,6 +659,7 @@
                                 const completedTasks = projectTasks.filter(t => t.status === 'approved').length;
                                 const progress = projectTasks.length > 0 ? Math.round((completedTasks / projectTasks.length) * 100) : 0;
                                 const projectId = proj.id || proj._id;
+                                const allTasksApproved = projectTasks.length > 0 && projectTasks.every(t => t.status === 'approved');
                                 
                                 return `
                                     <div class="project-card">
@@ -685,6 +671,14 @@
                                         <div><strong>Domain:</strong> ${escapeHtml(proj.domain)} | <strong>Difficulty:</strong> ${escapeHtml(proj.difficulty)}</div>
                                         <div><strong>Description:</strong> ${escapeHtml(proj.description)}</div>
                                         <div class="progress-bar"><div class="progress-fill" style="width: ${progress}%"></div></div>
+                                        
+                                        ${allTasksApproved ? `
+                                            <div style="margin: 1rem 0; text-align: center;">
+                                                <button onclick="window.showCertificate('${projectId}', '${email}')" class="btn btn-success" style="width: 100%;">
+                                                    🎓 View Your Certificate
+                                                </button>
+                                            </div>
+                                        ` : ''}
                                         
                                         <h4>📋 My Tasks (${projectTasks.length})</h4>
                                         ${projectTasks.length === 0 ? '<div class="message">No tasks assigned yet.</div>' :
@@ -911,7 +905,6 @@
                 await updateInvitationStatusAPI(invitationId, 'accepted');
                 await addContributorToProject(projectId, freelancerEmail);
                 
-                // Update project status if needed
                 const project = await apiFetch(`/projects/${projectId}`);
                 if (project && project.status === 'available') {
                     await updateProjectStatus(projectId, 'in-progress');
@@ -985,7 +978,6 @@
         if (!session) return;
         
         try {
-            // Check if invitation already exists
             const existingInvitations = await getInvitationsByProject(projectId);
             const existing = existingInvitations.find(i => i.freelancerEmail === freelancerEmail && i.status === 'pending');
             
@@ -1254,7 +1246,6 @@
                 return;
             }
             
-            // Use the updated submitWork function which saves to task.submissionLink
             const success = await submitWork(projectId, freelancerEmail, taskId, task.title, description, fileUrl || "work_sample.pdf");
             
             if (success) {
