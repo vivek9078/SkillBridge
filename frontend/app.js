@@ -522,7 +522,6 @@
                 role: "contributor",
                 phone: phone,
                 skills: category,
-                category: category,
                 image: image,
                 pastExperience: experience
             });
